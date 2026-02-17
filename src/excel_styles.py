@@ -2,7 +2,7 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 
 def setup_table_styles():
-    header_fill = PatternFill("solid", fgColor="BDD7EE")  # light blue (closer to screenshot)
+    header_fill = PatternFill("solid", fgColor="BDD7EE")
     header_font = Font(color="000000", bold=True)
     header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
