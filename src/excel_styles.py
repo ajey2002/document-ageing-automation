@@ -2,15 +2,25 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 
 def setup_table_styles():
-    header_fill = PatternFill("solid", fgColor="BDD7EE")
+    # Header
+    header_fill = PatternFill("solid", fgColor="9DC3E6") 
     header_font = Font(color="000000", bold=True)
-    header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    header_align = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
 
     title_font = Font(bold=True, size=14)
-    title_align = Alignment(horizontal="center", vertical="center")
+    title_align = Alignment(horizontal="center", vertical="bottom")
+
+    # Default alignments
+    bottom_left = Alignment(horizontal="left", vertical="bottom", wrap_text=False)
+    bottom_center = Alignment(horizontal="center", vertical="bottom", wrap_text=False)
+    bottom_right = Alignment(horizontal="right", vertical="bottom", wrap_text=False)
 
     thin = Side(style="thin", color="000000")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    # Double top border for totals (SAP-ish)
+    double = Side(style="double", color="000000")
+    total_top_border = Border(left=thin, right=thin, top=double, bottom=thin)
 
     total_font = Font(bold=True)
 
@@ -21,5 +31,9 @@ def setup_table_styles():
         "title_font": title_font,
         "title_align": title_align,
         "border": border,
+        "total_top_border": total_top_border,
         "total_font": total_font,
+        "bottom_left": bottom_left,
+        "bottom_center": bottom_center,
+        "bottom_right": bottom_right,
     }

@@ -16,7 +16,7 @@ from .config import (
 )
 
 
-def autosize_columns(ws, min_width=12, max_width=60):
+def autosize_columns(ws, min_width=10, max_width=70):
     for col in ws.columns:
         max_len = 0
         col_letter = get_column_letter(col[0].column)
@@ -26,17 +26,24 @@ def autosize_columns(ws, min_width=12, max_width=60):
         ws.column_dimensions[col_letter].width = max(min_width, min(max_width, max_len + 2))
 
 
+def _apply_row_style(ws, row_idx: int, col_from: int, col_to: int, border, alignment):
+    for c in range(col_from, col_to + 1):
+        cell = ws.cell(row=row_idx, column=c)
+        cell.border = border
+        cell.alignment = alignment
+
+
 def build_summary_sheet(wb: Workbook, sheet_name: str, df: pd.DataFrame):
     styles = setup_table_styles()
     ws = wb.create_sheet(sheet_name)
 
-    # Title row (merged)
+    # Title row (Row 1) + keep Row 2 blank 
     ws.merge_cells("A1:F1")
     ws["A1"].value = f"Document Ageing Report as at {date.today().strftime('%d.%m.%Y')}"
     ws["A1"].font = styles["title_font"]
     ws["A1"].alignment = styles["title_align"]
 
-    # Table headers (row 3)
+    # Header row (Row 3)
     headers = [
         "Comapany",
         "Account",
@@ -45,7 +52,6 @@ def build_summary_sheet(wb: Workbook, sheet_name: str, df: pd.DataFrame):
         "Local Currency",
         "Amount in local currency",
     ]
-
     header_row = 3
     for c, h in enumerate(headers, start=1):
         cell = ws.cell(row=header_row, column=c, value=h)
@@ -54,7 +60,7 @@ def build_summary_sheet(wb: Workbook, sheet_name: str, df: pd.DataFrame):
         cell.alignment = styles["header_align"]
         cell.border = styles["border"]
 
-    # Build summary (group + sum)
+    # Summary aggregation
     summary_df = (
         df.groupby([COL_COMPANY, "_AccountClean", COL_DOC_CURR, COL_LOC_CURR], dropna=False)
           .agg({COL_AMT_DOC: "sum", COL_AMT_LOC: "sum"})
@@ -72,11 +78,18 @@ def build_summary_sheet(wb: Workbook, sheet_name: str, df: pd.DataFrame):
         ws.cell(r, 5).value = summary_df.iloc[i][COL_LOC_CURR]
         ws.cell(r, 6).value = float(summary_df.iloc[i][COL_AMT_LOC])
 
+        # Borders + vertical bottom alignment for entire row
         for c in range(1, 7):
             ws.cell(r, c).border = styles["border"]
+            ws.cell(r, c).alignment = styles["bottom_center"]  # default for summary
+
+        # Amount columns right aligned (D and F)
+        ws.cell(r, 4).alignment = styles["bottom_right"]
+        ws.cell(r, 6).alignment = styles["bottom_right"]
+
         r += 1
 
-    # number formats
+    # number formats for amount columns
     for rr in range(start_row, r):
         ws.cell(rr, 4).number_format = "#,##0.00;(#,##0.00)"
         ws.cell(rr, 6).number_format = "#,##0.00;(#,##0.00)"
@@ -90,17 +103,18 @@ def build_account_sheet(wb: Workbook, account: str, sub_df: pd.DataFrame):
     styles = setup_table_styles()
     ws = wb.create_sheet(title=account[:31])
 
-    # Title
-    ws.merge_cells("A1:J1")
-    ws["A1"].value = f"Account: {account}  |  As at {date.today().strftime('%d.%m.%Y')}"
-    ws["A1"].font = styles["title_font"]
-    ws["A1"].alignment = styles["title_align"]
+    # Keep Row 1 blank
+    ws.merge_cells("A2:J2")
+    ws["A2"].value = f"Account: {account}  |  As at {date.today().strftime('%d.%m.%Y')}"
+    ws["A2"].font = styles["title_font"]
+    ws["A2"].alignment = styles["title_align"]
 
     headers = [
         "Comapany", "Account", "Document Date", "Document Type", "Document currency",
         "Amount in doc. curr.", "Local Currency", "Amount in local currency", "Text", "Doc Ageing"
     ]
 
+    # Header row (Row 3)
     header_row = 3
     for c, h in enumerate(headers, start=1):
         cell = ws.cell(row=header_row, column=c, value=h)
@@ -125,23 +139,46 @@ def build_account_sheet(wb: Workbook, account: str, sub_df: pd.DataFrame):
         ws.cell(r, 9).value = sub_df.iloc[i][COL_TEXT]
 
         # Doc Ageing (TODAY - Document Date col C)
-        ws.cell(r, 10).value = f"=TODAY()-C{r}"
+        ws.cell(r, 10).value = f'=IF(C{r}="","",TODAY()-C{r})'
 
+        # Apply borders + bottom alignment to all cells
         for c in range(1, 11):
             ws.cell(r, c).border = styles["border"]
+            ws.cell(r, c).alignment = styles["bottom_left"]  # base
+
+        # Alignments per requirement:
+        # Center: Document Type (D), Document currency (E), Local Currency (G), Doc Ageing (J)
+        ws.cell(r, 4).alignment = styles["bottom_center"]
+        ws.cell(r, 5).alignment = styles["bottom_center"]
+        ws.cell(r, 7).alignment = styles["bottom_center"]
+        ws.cell(r, 10).alignment = styles["bottom_center"]
+
+        # Center: Account + Document Date
+        ws.cell(r, 2).alignment = styles["bottom_center"]
+        ws.cell(r, 3).alignment = styles["bottom_center"]
+
+        # Right: amounts
+        ws.cell(r, 6).alignment = styles["bottom_right"]
+        ws.cell(r, 8).alignment = styles["bottom_right"]
 
     last_data_row = start_row + len(sub_df) - 1
     total_row = last_data_row + 1 if len(sub_df) else start_row
 
-    # Totals in F and H
+    # Totals in F and H 
     if len(sub_df):
         ws.cell(total_row, 6).value = f"=SUM(F{start_row}:F{last_data_row})"
         ws.cell(total_row, 8).value = f"=SUM(H{start_row}:H{last_data_row})"
 
+    # Totals styling: bold + double top border on the whole row
     for c in range(1, 11):
         cell = ws.cell(total_row, c)
-        cell.border = styles["border"]
+        cell.border = styles["total_top_border"]
         cell.font = styles["total_font"]
+        cell.alignment = styles["bottom_left"]
+
+    # Alignment on totals row
+    ws.cell(total_row, 6).alignment = styles["bottom_right"]
+    ws.cell(total_row, 8).alignment = styles["bottom_right"]
 
     # Formats
     ws.freeze_panes = "A4"
@@ -151,5 +188,5 @@ def build_account_sheet(wb: Workbook, account: str, sub_df: pd.DataFrame):
         ws.cell(rr, 6).number_format = "#,##0.00;(#,##0.00)"
         ws.cell(rr, 8).number_format = "#,##0.00;(#,##0.00)"
 
-    autosize_columns(ws, min_width=12, max_width=70)
+    autosize_columns(ws, min_width=10, max_width=70)
     return ws
